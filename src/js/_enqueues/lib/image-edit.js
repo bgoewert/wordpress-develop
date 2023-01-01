@@ -34,6 +34,12 @@
 			selection = this.iasapi.getSelection();
 		}
 
+		if ( ! cropButton.classList.contains( 'imgedit-crop-clear' ) ) {
+			imageEdit.setDisabled($('.imgedit-crop-clear'), 1);
+		} else {
+			imageEdit.setDisabled($('.imgedit-crop-clear'), 0);
+		}
+
 		// If we don't already have a selection, select the entire image.
 		if ( 0 === selection.x1 && 0 === selection.y1 && 0 === selection.x2 && 0 === selection.y2 ) {
 			this.iasapi.setSelection( 0, 0, img.innerWidth(), img.innerHeight(), true );
@@ -41,8 +47,19 @@
 			this.iasapi.update();
 		} else {
 
-			// Otherwise, perform the crop.
-			imageEdit.crop( postid, nonce , cropButton );
+			if ( cropButton.classList.contains( 'imgedit-crop-clear' ) ) {
+				this.iasapi.cancelSelection();
+				imageEdit.setDisabled($('.imgedit-crop-apply'), 0);
+
+				$('#imgedit-sel-width-' + postid).val('');
+				$('#imgedit-sel-height-' + postid).val('');
+				$('#imgedit-start-x-' + postid).val('0');
+				$('#imgedit-start-y-' + postid).val('0');
+				$('#imgedit-selection-' + postid).val('');
+			} else {
+				// Otherwise, perform the crop.
+				imageEdit.crop( postid, nonce , cropButton );
+			}
 		}
 	},
 
@@ -122,6 +139,17 @@
 		t.postid = postid;
 		$('#imgedit-response-' + postid).empty();
 
+		$('#imgedit-panel-' + postid).on( 'keypress', function(e) {
+			var nonce = $( '#imgedit-nonce-' + postid ).val();
+			if ( e.which === 26 && e.ctrlKey ) {
+				imageEdit.undo( postid, nonce );
+			}
+
+			if ( e.which === 25 && e.ctrlKey ) {
+				imageEdit.redo( postid, nonce );
+			}
+		});
+
 		$('#imgedit-panel-' + postid).on( 'keypress', 'input[type="text"]', function(e) {
 			var k = e.keyCode;
 
@@ -185,6 +213,28 @@
 		$el
 			.attr( 'aria-expanded', 'false' === $el.attr( 'aria-expanded' ) ? 'true' : 'false' )
 			.parents( '.imgedit-group-top' ).toggleClass( 'imgedit-help-toggled' ).find( '.imgedit-help' ).slideToggle( 'fast' );
+
+		return false;
+	},
+
+	/**
+	 * Shows or hides image edit input fields when enabled.
+	 *
+	 * @since 6.1.0
+	 *
+	 * @memberof imageEdit
+	 *
+	 * @param {HTMLElement} el The element to trigger the edit panel.
+	 *
+	 * @return {boolean} Always returns false.
+	 */
+	toggleControls : function(el) {
+		var $el = $( el );
+		var $target = $( '#' + $el.attr( 'aria-controls' ) );
+		$el
+			.attr( 'aria-expanded', 'false' === $el.attr( 'aria-expanded' ) ? 'true' : 'false' );
+		$target
+			.parent( '.imgedit-group' ).toggleClass( 'imgedit-panel-active' );
 
 		return false;
 	},
@@ -402,9 +452,9 @@
 				}
 
 				if ( $('#imgedit-history-' + postid).val() && $('#imgedit-undone-' + postid).val() === '0' ) {
-					$('input.imgedit-submit-btn', '#imgedit-panel-' + postid).prop('disabled', false);
+					$('button.imgedit-submit-btn', '#imgedit-panel-' + postid).prop('disabled', false);
 				} else {
-					$('input.imgedit-submit-btn', '#imgedit-panel-' + postid).prop('disabled', true);
+					$('button.imgedit-submit-btn', '#imgedit-panel-' + postid).prop('disabled', true);
 				}
 
 				t.toggleEditor(postid, 0);
@@ -710,6 +760,8 @@
 		var t = this,
 			selW = $('#imgedit-sel-width-' + postid),
 			selH = $('#imgedit-sel-height-' + postid),
+			selX = $('#imgedit-start-x-' + postid),
+			selY = $('#imgedit-start-y-' + postid),
 			$image = $( image ),
 			$img;
 
@@ -768,6 +820,8 @@
 			 */
 			onSelectStart: function() {
 				imageEdit.setDisabled($('#imgedit-crop-sel-' + postid), 1);
+				imageEdit.setDisabled($('.imgedit-crop-clear'), 1);
+				imageEdit.setDisabled($('.imgedit-crop-apply'), 1);
 			},
 			/**
 			 * Event triggered when the selection is ended.
@@ -781,6 +835,9 @@
 			 */
 			onSelectEnd: function(img, c) {
 				imageEdit.setCropSelection(postid, c);
+				if ( ! $('#imgedit-crop > *').is(':visible') ) {
+					imageEdit.toggleControls($('.imgedit-crop.button'));
+				}
 			},
 
 			/**
@@ -797,6 +854,8 @@
 				var sizer = imageEdit.hold.sizer;
 				selW.val( imageEdit.round(c.width / sizer) );
 				selH.val( imageEdit.round(c.height / sizer) );
+				selX.val( imageEdit.round(c.x1 / sizer) );
+				selY.val( imageEdit.round(c.y1 / sizer) );
 			}
 		});
 	},
@@ -823,6 +882,8 @@
 			this.setDisabled( $( '#imgedit-crop-sel-' + postid ), 1 );
 			$('#imgedit-sel-width-' + postid).val('');
 			$('#imgedit-sel-height-' + postid).val('');
+			$('#imgedit-start-x-' + postid).val('0');
+			$('#imgedit-start-y-' + postid).val('0');
 			$('#imgedit-selection-' + postid).val('');
 			return false;
 		}
@@ -1011,6 +1072,8 @@
 		// Clear the selection fields after cropping.
 		$('#imgedit-sel-width-' + postid).val('');
 		$('#imgedit-sel-height-' + postid).val('');
+		$('#imgedit-start-x-' + postid).val('0');
+		$('#imgedit-start-y-' + postid).val('0');
 	},
 
 	/**
@@ -1094,6 +1157,8 @@
 	 */
 	setNumSelection : function( postid, el ) {
 		var sel, elX = $('#imgedit-sel-width-' + postid), elY = $('#imgedit-sel-height-' + postid),
+			elX1 = $('#imgedit-start-x-' + postid), elY1 = $('#imgedit-start-y-' + postid),
+			xS = this.intval( elX1.val() ), yS = this.intval( elY1.val() ),
 			x = this.intval( elX.val() ), y = this.intval( elY.val() ),
 			img = $('#image-preview-' + postid), imgh = img.height(), imgw = img.width(),
 			sizer = this.hold.sizer, x1, y1, x2, y2, ias = this.iasapi;
@@ -1112,11 +1177,11 @@
 			return false;
 		}
 
-		if ( x && y && ( sel = ias.getSelection() ) ) {
+		if ( ( ( x && y ) || ( xS && yS ) ) && ( sel = ias.getSelection() ) ) {
 			x2 = sel.x1 + Math.round( x * sizer );
 			y2 = sel.y1 + Math.round( y * sizer );
-			x1 = sel.x1;
-			y1 = sel.y1;
+			x1 = ( xS === sel.x1 ) ? sel.x1 : Math.round( xS * sizer );
+			y1 = ( yS === sel.y1 ) ? sel.y1 : Math.round( yS * sizer );
 
 			if ( x2 > imgw ) {
 				x1 = 0;
@@ -1202,10 +1267,21 @@
 
 				if ( r > h ) {
 					r = h;
+					var errorMessage = __( 'Selected crop ratio exceeds the boundaries of the image. Try a different ratio.' );
+
+					$( '#imgedit-crop-' + postid )
+						.prepend( '<div class="notice notice-error" tabindex="-1" role="alert"><p>' + errorMessage + '</p></div>' );
+
+					wp.a11y.speak( errorMessage, 'assertive' );
 					if ( n ) {
-						$('#imgedit-crop-height-' + postid).val('');
+						$('#imgedit-crop-height-' + postid).val( '' );
 					} else {
-						$('#imgedit-crop-width-' + postid).val('');
+						$('#imgedit-crop-width-' + postid).val( '');
+					}
+				} else {
+					var error = $( '#imgedit-crop-' + postid ).find( '.notice-error' );
+					if ( 'undefined' !== typeof( error ) ) {
+						error.remove();
 					}
 				}
 
@@ -1228,7 +1304,7 @@
 	 *                        void when it is.
 	 */
 	validateNumeric: function( el ) {
-		if ( ! this.intval( $( el ).val() ) ) {
+		if ( false === this.intval( $( el ).val() ) ) {
 			$( el ).val( '' );
 			return false;
 		}
